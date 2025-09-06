@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Hello Cara</title>
+</head>
+<body>
+  <div style="text-align: center; padding: 20px;">
+    <h1>Chat with Cara</h1>
+    <p>Cara will guide you through spaghetti carbonara step by step</p>
+    <video id="persona-video" autoplay playsinline style="max-width: 100%; border-radius: 8px;"></video>
+    <div id="status" style="margin-top: 15px; font-size: 14px; color: #666;">Loading...</div>
+  </div>
+
+  <script type="module">
+    import { createClient } from "https://esm.sh/@anam-ai/js-sdk@latest";
+
+    // ⚠️ Replace with your actual API key (for demo only — hide it behind a backend in production)
+    const API_KEY = "";
+
+    const statusElement = document.getElementById("status");
+
+    // Hardcoded Carbonara recipe steps
+    const recipeSteps = [
+      "Put the egg yolks into a bowl, finely grate in the Parmesan, season with pepper, then mix well with a fork and put to one side.",
+      "Cut any hard skin off the pancetta and set aside, then chop the meat.",
+      "Cook the spaghetti in a large pan of boiling salted water until al dente.",
+      "Meanwhile, rub the pancetta skin, if you have any, all over the base of a medium frying pan, then place over a medium-high heat.",
+      "Peel the garlic, then crush with the palm of your hand, add it to the pan and leave it to flavour the fat for 1 minute. Stir in the pancetta, then cook for 4 minutes, or until it starts to crisp up.",
+      "Pick out and discard the garlic from the pan, then, reserving some of the cooking water, drain and add the spaghetti. Toss well over the heat so it really soaks up all that lovely flavour, then remove the pan from the heat.",
+      "Add a splash of the cooking water and toss well, season with pepper, then pour in the egg mixture – the pan will help to cook the egg gently, rather than scrambling it. Toss well, adding more cooking water until it's lovely and glossy.",
+      "Serve with a grating of Parmesan and an extra twist of pepper."
+    ];
+
+    let anamClient;
+    let currentStep = 0;
+
+    async function createSessionToken() {
+      const response = await fetch("https://api.anam.ai/v1/auth/session-token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${API_KEY}`,
+        },
+        body: JSON.stringify({
+          personaConfig: {
+            name: "Cara",
+            avatarId: "30fa96d0-26c4-4e55-94a0-517025942e18",
+            voiceId: "6bfbe25a-979d-40f3-a92b-5394170af54b",
+            llmId: "0934d97d-0c3a-4f33-91b0-5e136a0ef466",
+            systemPrompt:
+              "You are Cara, a friendly AI chef. Guide the user through the carbonara recipe one step at a time. After each step, tell them to say 'next' or 'repeat'.",
+          },
+        }),
+      });
+
+      const data = await response.json();
+      return data.sessionToken;
+    }
+
+    function say(text) {
+      if (anamClient) {
+        anamClient.sendMessage(text);
+      }
+    }
+
+    function deliverStep() {
+      if (currentStep < recipeSteps.length) {
+        say(
+          recipeSteps[currentStep] +
+            " When you are ready, say 'next' to continue or 'repeat' to hear this step again."
+        );
+      } else {
+        say("That’s all the steps. Enjoy your spaghetti carbonara!");
+      }
+    }
+
+    function handleUserInput(message) {
+      const msg = message.toLowerCase();
+
+      if (msg.includes("next")) {
+        currentStep++;
+        deliverStep();
+      } else if (msg.includes("repeat")) {
+        deliverStep();
+      } else {
+        say("Please say 'next' to continue or 'repeat' to hear the step again.");
+      }
+    }
+
+    async function startChat() {
+      try {
+        statusElement.textContent = "Creating session...";
+        const sessionToken = await createSessionToken();
+
+        anamClient = createClient(sessionToken);
+        await anamClient.streamToVideoElement("persona-video");
+
+        // Listen for speech → intent
+        anamClient.on("message", (event) => {
+          if (event?.message?.text) {
+            handleUserInput(event.message.text);
+          }
+        });
+
+        statusElement.textContent = "Connected! Cara will start now.";
+        deliverStep(); // start with step 1
+      } catch (error) {
+        console.error("Failed to start chat:", error);
+        statusElement.textContent = "Failed to connect. Check your API key.";
+      }
+    }
+
+    // Auto-start when page loads
+    startChat();
+  </script>
+</body>
+</html>
